@@ -1,0 +1,30 @@
+# Terraform: local provider/module cache
+.terraform/
+
+# Terraform state (may contain secrets; will live in a remote backend)
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Variable files (often contain secrets/environment-specific values)
+*.tfvars
+*.tfvars.json
+
+# Local overrides
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Saved plan files
+*.tfplan
+tfplan
+
+# CLI config
+.terraformrc
+terraform.rc
+
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored; commit it.
