@@ -9,7 +9,8 @@ for SSM Session Manager access.
 | Path | What it is |
 |---|---|
 | `infra/` | Main root module: the app infrastructure. State lives in S3 (see below). |
-| `infra/bootstrap/` | Separate root module that creates the S3 state bucket. Uses **local** state, committed to git. |
+| `infra/bootstrap/` | Creates the S3 state bucket. Uses **local** state, committed to git. |
+| `infra/account/` | Account access: an IAM Identity Center admin user and group. State in S3. |
 | `infra/user-data.sh.tftpl` | First-boot script (swap, Docker, `/opt/app`). Editing it **replaces the instance**. |
 
 Each directory is its own root module: run Terraform from inside it (or with
@@ -23,23 +24,47 @@ Each directory is its own root module: run Terraform from inside it (or with
 
 ## First-time setup
 
+Steps 1–4 run as the account's root user, once. Everything after runs as the admin identity.
+
 1. **Create the state bucket**
    ```sh
    cd infra/bootstrap
    terraform init
-   terraform apply
+   terraform plan -out=tfplan
+   terraform apply tfplan
    git add terraform.tfstate && git commit -m "Bootstrap Terraform state bucket"
    ```
-2. **Point the main module at it.** Paste the output of
-   `terraform output -raw backend_config` into the `terraform {}` block in
-   `infra/versions.tf`.
-3. **Migrate any existing local state**
+2. **Point the other modules at it.** Paste `terraform output -raw backend_config_account`
+   into the `terraform {}` block in `infra/account/versions.tf`, and
+   `terraform output -raw backend_config_infra` into the one in `infra/versions.tf`.
+   Commit both files.
+3. **Enable IAM Identity Center** in the console, in `us-east-1`. This can't be done from
+   Terraform.
+4. **Create the admin user**
+   ```sh
+   cd infra/account
+   cp terraform.tfvars.example terraform.tfvars   # fill in; gitignored
+   terraform init
+   terraform plan -out=tfplan
+   terraform apply tfplan
+   ```
+5. **Finish the admin user in the console** (IAM Identity Center → Users): send the
+   password setup email, sign in at the access portal (`terraform output sso_start_url`),
+   and enroll MFA.
+6. **Switch the CLI to the admin identity**
+   ```sh
+   aws configure sso      # start URL, region, account and role from `terraform output`
+   aws sso login --profile <profile>
+   export AWS_PROFILE=<profile>
+   aws sts get-caller-identity   # should show AWSReservedSSO_AdministratorAccess_..., not root
+   ```
+   From here on, don't use root. Make sure it has MFA and no access keys.
+7. **Initialize the main module**
    ```sh
    cd infra
-   terraform init -migrate-state
+   terraform init        # add -migrate-state if it reports existing local state
    ```
-   Confirm `terraform plan` shows no changes, then delete the leftover local
-   `terraform.tfstate*` files and commit `versions.tf`.
+   Then follow the workflow below.
 
 ## Workflow: apply, then commit
 

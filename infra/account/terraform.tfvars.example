@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+# State is stored in S3, so these values stay out of git.
+admin_user_name   = "jdoe"
+admin_email       = "jdoe@example.com"
+admin_given_name  = "Jane"
+admin_family_name = "Doe"

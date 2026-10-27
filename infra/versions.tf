@@ -7,6 +7,14 @@ terraform {
       version = "~> 6.69"
     }
   }
+
+  backend "s3" {
+    bucket       = "varpad-tfstate-646323602481-us-east-1"
+    key          = "infra/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {

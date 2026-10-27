@@ -1,4 +1,4 @@
-# --- Remote state bucket for ../ (the main config) ---
+# --- Remote state bucket for ../ (the main config) and ../account ---
 
 data "aws_caller_identity" "current" {}
 
