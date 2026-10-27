@@ -18,9 +18,20 @@ Each directory is its own root module: run Terraform from inside it (or with
 
 ## Prerequisites
 
-- Terraform, at the version pinned in `.terraform-version`.
-- AWS CLI v2 and credentials for the target account.
-- [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) for shell access.
+- **Terraform**, at the version pinned in `.terraform-version`.
+- **AWS CLI v2**, with an SSO profile named `varpad-admin` (created in first-time setup).
+- **[Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)** for shell access to the instance.
+- **[direnv](https://direnv.net/)** (optional) to set `AWS_PROFILE` automatically.
+
+### AWS profile
+
+The repo-root `.envrc` sets `AWS_PROFILE=varpad-admin` for Terraform and the AWS CLI:
+
+- **With direnv:** run `direnv allow` once in the repo; it then loads on `cd` and unloads on leaving.
+- **Without direnv:** run `source .envrc` in each new terminal.
+- **Different profile name?** Put `export AWS_PROFILE=<yours>` in `.envrc.local` (gitignored).
+
+Check which identity you're using with `aws sts get-caller-identity` before applying.
 
 ## First-time setup
 
@@ -53,9 +64,10 @@ Steps 1–4 run as the account's root user, once. Everything after runs as the a
    and enroll MFA.
 6. **Switch the CLI to the admin identity**
    ```sh
-   aws configure sso      # start URL, region, account and role from `terraform output`
-   aws sso login --profile <profile>
-   export AWS_PROFILE=<profile>
+   aws configure sso      # values from `terraform output`; name the profile varpad-admin
+   aws logout             # drop the root credentials from `aws login`
+   direnv allow           # or: source .envrc   (from the repo root; sets AWS_PROFILE)
+   aws sso login
    aws sts get-caller-identity   # should show AWSReservedSSO_AdministratorAccess_..., not root
    ```
    From here on, don't use root. Make sure it has MFA and no access keys.
