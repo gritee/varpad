@@ -32,5 +32,14 @@ systemctl enable --now docker
 usermod -aG docker ubuntu
 docker compose version
 
+# --- AWS CLI v2: deploys run `aws ecr get-login-password | docker login` before each pull ---
+apt_get install -y unzip
+tmp=$(mktemp -d)
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "$tmp/awscliv2.zip"
+unzip -q "$tmp/awscliv2.zip" -d "$tmp"
+"$tmp/aws/install"
+rm -rf "$tmp"
+aws --version
+
 # --- App directory used by deploys ---
 mkdir -p /opt/app
