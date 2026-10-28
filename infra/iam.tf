@@ -18,10 +18,31 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# Broad read across the account's ECR repos; narrow to one repo once it exists.
-resource "aws_iam_role_policy_attachment" "ecr_read" {
-  role       = aws_iam_role.app.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+# Pull access to this app's ECR repos only.
+resource "aws_iam_role_policy" "ecr_pull" {
+  name = "ecr-pull"
+  role = aws_iam_role.app.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # `aws ecr get-login-password`; this action doesn't support resource scoping.
+        Effect   = "Allow"
+        Action   = "ecr:GetAuthorizationToken"
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
+        ]
+        Resource = [for repo in aws_ecr_repository.images : repo.arn]
+      },
+    ]
+  })
 }
 
 resource "aws_iam_instance_profile" "app" {

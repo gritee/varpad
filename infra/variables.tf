@@ -33,3 +33,15 @@ variable "ingress_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "container_images" {
+  description = "Container images to create ECR repositories for; each repo is named <name>/<image>."
+  type        = set(string)
+  default     = ["web"]
+}
+
+variable "ecr_images_to_keep" {
+  description = "Number of most recent images each ECR repository keeps; older ones expire."
+  type        = number
+  default     = 20
+}

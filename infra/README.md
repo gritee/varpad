@@ -21,6 +21,7 @@ Each directory is its own root module: run Terraform from inside it (or with
 - **Terraform**, at the version pinned in `.terraform-version`.
 - **AWS CLI v2**, with an SSO profile named `varpad-admin` (created in first-time setup).
 - **[Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)** for shell access to the instance.
+- **[just](https://just.systems/man/en/)** for the project tasks in the repo-root `justfile`.
 - **[direnv](https://direnv.net/)** (optional) to set `AWS_PROFILE` automatically.
 
 ### AWS profile
@@ -124,11 +125,27 @@ These destroy the server and create a new one (new root disk; the Elastic IP mov
   which is otherwise ignored)
 - some instance argument changes. The plan says `must be replaced`.
 
+## Project tasks (`just`)
+
+The repo-root `justfile` wraps the commands above for the main module. Recipes work
+from any directory in the repo, log in to AWS SSO first if the session has expired, and
+print each command before running it.
+
+```sh
+just                 # list recipes
+just plan            # terraform plan -out=tfplan (extra args pass through)
+just apply           # terraform apply tfplan, after a confirmation prompt
+just ssm             # shell on the instance via SSM Session Manager
+just --dry-run plan  # show the commands without running them
+```
+
+The bootstrap and account modules are run by hand, as in first-time setup.
+
 ## Useful commands
 
 ```sh
 terraform output                                 # public_ip (Elastic IP), instance_id, ...
-$(terraform output -raw ssm_session_command)     # shell on the instance
+$(terraform output -raw ssm_session_command)     # shell on the instance (or: just ssm)
 ```
 
 On the instance, check first-boot setup with `cloud-init status --long` and
