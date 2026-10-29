@@ -45,3 +45,9 @@ variable "ecr_images_to_keep" {
   type        = number
   default     = 20
 }
+
+variable "github_repository" {
+  description = "GitHub repo (owner/name) whose main-branch workflows may assume the CI role."
+  type        = string
+  default     = "gritee/varpad"
+}
