@@ -136,6 +136,7 @@ just                 # list recipes
 just plan            # terraform plan -out=tfplan (extra args pass through)
 just apply           # terraform apply tfplan, after a confirmation prompt
 just ssm             # shell on the instance via SSM Session Manager
+just live            # release each running container was started from (via SSM Run Command)
 just --dry-run plan  # show the commands without running them
 ```
 

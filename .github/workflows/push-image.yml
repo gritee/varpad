@@ -1,6 +1,7 @@
-# Build an image from <image>/Dockerfile and push it to ECR, tagged with the commit SHA.
-# Called by other workflows (`uses: ./.github/workflows/push-image.yml`), which decide
-# which images to build and get the pushed image URI back; or run by hand.
+# Build an image from <image>/Dockerfile and push it to ECR, tagged with the SHA of the last
+# commit that changed <image>/, so commits that don't touch an image reuse its existing tag.
+# Called by other workflows (`uses: ./.github/workflows/push-image.yml`), which get the
+# image URI back; or run by hand.
 
 name: Push image
 
@@ -17,7 +18,7 @@ on:
         required: true
     outputs:
       image_uri:
-        description: Pushed image, as <registry>/<repo>:<sha>
+        description: Pushed image, as <registry>/<repo>:<tag>
         value: ${{ jobs.job_push.outputs.image_uri }}
 
 env:
@@ -35,6 +36,8 @@ jobs:
       image_uri: ${{ steps.step_uri.outputs.image_uri }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history, to find the last commit that changed the image
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -45,13 +48,16 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - id: step_uri
-        run: echo "image_uri=${{ steps.step_ecr.outputs.registry }}/varpad/$IMAGE:$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+        run: |
+          tag=$(git log -1 --format=%H -- "$IMAGE/")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${{ steps.step_ecr.outputs.registry }}/varpad/$IMAGE:$tag" >> "$GITHUB_OUTPUT"
 
-      # Tags are immutable, so a re-run for the same commit reuses the image already pushed.
+      # Tags are immutable, so an image already pushed for this tag is reused.
       - id: step_exists
         run: |
           if aws ecr describe-images --repository-name "varpad/$IMAGE" \
-              --image-ids imageTag="$GITHUB_SHA" >/dev/null 2>&1; then
+              --image-ids imageTag="${{ steps.step_uri.outputs.tag }}" >/dev/null 2>&1; then
             echo "pushed=true" >> "$GITHUB_OUTPUT"
           fi
 

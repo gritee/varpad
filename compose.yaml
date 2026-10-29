@@ -1,0 +1,15 @@
+# What runs on the instance. The Release workflow copies this to /opt/app with a .env
+# that sets the release (the commit on main being deployed) and each image URI, then runs
+# `docker compose pull` and `docker compose up -d`.
+
+# Every container is labeled with the release it was started from: see `just live`.
+x-release-label: &release-label
+  release: ${RELEASE:?set in .env by the Release workflow}
+
+services:
+  web:
+    image: ${WEB_IMAGE:?set in .env by the Release workflow}
+    ports:
+      - "80:80"
+    labels: *release-label
+    restart: unless-stopped
