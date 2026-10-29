@@ -47,7 +47,7 @@ variable "ecr_images_to_keep" {
 }
 
 variable "github_repository" {
-  description = "GitHub repo (owner/name) whose main-branch workflows may assume the CI role."
+  description = "GitHub repo whose main-branch workflows may assume the CI role, as it appears in the OIDC sub claim: owner@owner_id/name@repo_id."
   type        = string
-  default     = "gritee/varpad"
+  default     = "gritee@257450698/varpad@1438830019"
 }
