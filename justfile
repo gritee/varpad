@@ -23,6 +23,20 @@ apply: login
 ssm: login
     $(terraform output -raw ssm_session_command)
 
+# Show the release each container on the instance was started from, via SSM Run Command
+[working-directory('infra')]
+live: login
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    instance_id=$(terraform output -raw instance_id)
+    command_id=$(aws ssm send-command --instance-ids "$instance_id" \
+      --document-name AWS-RunShellScript --comment "just live" \
+      --parameters '{"commands":["docker ps --format \"table {{{{.Names}}\\t{{{{.Label \\\"release\\\"}}\\t{{{{.Image}}\\t{{{{.Status}}\""]}' \
+      --query Command.CommandId --output text)
+    aws ssm wait command-executed --command-id "$command_id" --instance-id "$instance_id"
+    aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance_id" \
+      --query StandardOutputContent --output text
+
 # Log in to AWS SSO only if there's no valid session
 [private]
 login:

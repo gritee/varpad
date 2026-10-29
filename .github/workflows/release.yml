@@ -1,0 +1,108 @@
+# On pushes to main, make sure every image is in ECR, then deploy compose.yaml to the instance
+# once a reviewer approves the `production` environment.
+# Adding an image: give it a job like `job_web`, add it to `job_deploy.needs`, and write its
+# image URI to .env in `step_deploy`.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  INSTANCE_NAME: varpad-app # Name tag of the instance to deploy to
+
+jobs:
+  # Builds only if the image's tag isn't in ECR yet.
+  job_web:
+    uses: ./.github/workflows/push-image.yml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      image: web
+
+  job_deploy:
+    needs: [job_web]
+    runs-on: ubuntu-latest
+    environment: production # waits for approval; its OIDC sub is what the deploy role trusts
+    permissions:
+      id-token: write # OIDC token for the AWS role
+      contents: read
+    concurrency:
+      group: deploy
+      cancel-in-progress: false # let a running deploy finish; the next one follows it
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::646323602481:role/varpad-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: step_instance
+        run: |
+          instance_id=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=$INSTANCE_NAME" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' --output text)
+          if [ -z "$instance_id" ] || [ "$(wc -w <<<"$instance_id")" -ne 1 ]; then
+            echo "::error::Expected one running instance named $INSTANCE_NAME, found: '$instance_id'"
+            exit 1
+          fi
+          echo "instance_id=$instance_id" >> "$GITHUB_OUTPUT"
+
+      # Runs as root on the instance, under sh (dash), so no pipefail.
+      - id: step_deploy
+        env:
+          WEB_IMAGE: ${{ needs.job_web.outputs.image_uri }}
+        run: |
+          registry=${WEB_IMAGE%%/*}
+          params=$(
+            jq -n \
+              --arg compose "$(base64 -w0 compose.yaml)" \
+              --arg env "$(printf 'RELEASE=%s\nWEB_IMAGE=%s\n' "$GITHUB_SHA" "$WEB_IMAGE" | base64 -w0)" \
+              --arg registry "$registry" \
+              --arg region "$AWS_REGION" \
+              '{
+                executionTimeout: ["300"],
+                commands: [
+                  "set -eu",
+                  "cd /opt/app",
+                  "echo \($compose) | base64 -d > compose.yaml",
+                  "echo \($env) | base64 -d > .env",
+                  "aws ecr get-login-password --region \($region) | docker login --username AWS --password-stdin \($registry)",
+                  "docker compose pull --quiet",
+                  "docker compose up -d --remove-orphans",
+                  "docker image prune -f",
+                  "docker compose ps"
+                ]
+              }'
+          )
+          command_id=$(aws ssm send-command \
+            --instance-ids "${{ steps.step_instance.outputs.instance_id }}" \
+            --document-name AWS-RunShellScript \
+            --comment "Release $GITHUB_SHA" \
+            --parameters "$params" \
+            --query Command.CommandId --output text)
+          echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
+
+      # `aws ssm wait command-executed` gives up after ~100s; poll for up to the execution timeout.
+      - id: step_wait
+        env:
+          INSTANCE_ID: ${{ steps.step_instance.outputs.instance_id }}
+          COMMAND_ID: ${{ steps.step_deploy.outputs.command_id }}
+        run: |
+          invocation() {
+            aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" "$@"
+          }
+          for _ in $(seq 66); do
+            sleep 5
+            # Fails with InvocationDoesNotExist until the instance picks the command up.
+            status=$(invocation --query Status --output text 2>/dev/null || echo Pending)
+            case $status in Pending | InProgress | Delayed) ;; *) break ;; esac
+          done
+          invocation --query StandardOutputContent --output text
+          invocation --query StandardErrorContent --output text >&2
+          echo "Status: $status"
+          [ "$status" = Success ]
