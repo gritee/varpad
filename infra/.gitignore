@@ -28,3 +28,6 @@ tfplan
 terraform.rc
 
 # NOTE: .terraform.lock.hcl is intentionally NOT ignored; commit it.
+
+# Shared project values (see project.auto.tfvars); an exception to *.tfvars above.
+!project.auto.tfvars

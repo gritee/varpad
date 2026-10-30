@@ -1,15 +1,18 @@
 # infra
 
-Terraform for varpad's AWS infrastructure: a single EC2 instance (Ubuntu 24.04 + Docker)
+Terraform for this project's AWS infrastructure: a single EC2 instance (Ubuntu 24.04 + Docker)
 in the default VPC, with an Elastic IP, a security group for HTTP/HTTPS, and an IAM role
-for SSM Session Manager access.
+for SSM Session Manager access. It also manages the GitHub repo's deploy settings: the
+`production` environment and the Actions variables the workflows read.
 
 ## Layout
 
 | Path | What it is |
 |---|---|
 | `infra/` | Main root module: the app infrastructure. State lives in S3 (see below). |
+| `infra/project.auto.tfvars` | The project's identity: AWS account, region, name, GitHub repo. Every module loads it (`bootstrap/` and `account/` link to it). |
 | `infra/bootstrap/` | Creates the S3 state bucket. Uses **local** state, committed to git. |
+| `infra/backend.hcl` | State bucket and region, shared by `infra/` and `infra/account/`. Written by bootstrap. |
 | `infra/account/` | Account access: an IAM Identity Center admin user and group. State in S3. |
 | `infra/user-data.sh.tftpl` | First-boot script (swap, Docker, `/opt/app`). Editing it **replaces the instance**. |
 
@@ -19,22 +22,24 @@ Each directory is its own root module: run Terraform from inside it (or with
 ## Prerequisites
 
 - **Terraform**, at the version pinned in `.terraform-version`.
-- **AWS CLI v2**, with an SSO profile named `varpad-admin` (created in first-time setup).
+- **AWS CLI v2**, with an SSO profile for the admin user (created in first-time setup).
 - **[Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)** for shell access to the instance.
 - **[just](https://just.systems/man/en/)** for the project tasks in the repo-root `justfile`.
-- **[direnv](https://direnv.net/)** (optional) to set `AWS_PROFILE` automatically.
+- **[GitHub CLI](https://cli.github.com/)** (`gh`), logged in as a repo admin. The main module's
+  GitHub provider uses its token: `just` recipes pass it as `GITHUB_TOKEN`; when running
+  `terraform` directly, `export GITHUB_TOKEN=$(gh auth token)` first.
 
-### AWS profile
+### AWS credentials
 
-The repo-root `.envrc` sets `AWS_PROFILE=varpad-admin` for Terraform and the AWS CLI:
-
-- **With direnv:** run `direnv allow` once in the repo; it then loads on `cd` and unloads on leaving.
-- **Without direnv:** run `source .envrc` in each new terminal.
-- **Different profile name?** Put `export AWS_PROFILE=<yours>` in `.envrc.local` (gitignored).
-
-Check which identity you're using with `aws sts get-caller-identity` before applying.
+Terraform and the AWS CLI use the `default` profile, or the one named by `AWS_PROFILE` if
+you export it. Every module stops before doing anything if the credentials belong to an
+account other than `account_id` in `project.auto.tfvars`.
 
 ## First-time setup
+
+Start by filling in `infra/project.auto.tfvars`. In a copy of this repo, also delete
+`infra/bootstrap/terraform.tfstate` and `infra/backend.hcl`: they describe the original's
+state bucket.
 
 Steps 1–4 run as the account's root user, once. Everything after runs as the admin identity.
 
@@ -46,17 +51,18 @@ Steps 1–4 run as the account's root user, once. Everything after runs as the a
    terraform apply tfplan
    git add terraform.tfstate && git commit -m "Bootstrap Terraform state bucket"
    ```
-2. **Point the other modules at it.** Paste `terraform output -raw backend_config_account`
-   into the `terraform {}` block in `infra/account/versions.tf`, and
-   `terraform output -raw backend_config_infra` into the one in `infra/versions.tf`.
-   Commit both files.
-3. **Enable IAM Identity Center** in the console, in `us-east-1`. This can't be done from
+2. **Point the other modules at it**
+   ```sh
+   terraform output -raw backend_hcl > ../backend.hcl
+   git add ../backend.hcl && git commit -m "Point Terraform backends at the state bucket"
+   ```
+3. **Enable IAM Identity Center** in the console, in the project's `region`. This can't be done from
    Terraform.
 4. **Create the admin user**
    ```sh
    cd infra/account
    cp terraform.tfvars.example terraform.tfvars   # fill in; gitignored
-   terraform init
+   terraform init -backend-config=../backend.hcl
    terraform plan -out=tfplan
    terraform apply tfplan
    ```
@@ -65,19 +71,22 @@ Steps 1–4 run as the account's root user, once. Everything after runs as the a
    and enroll MFA.
 6. **Switch the CLI to the admin identity**
    ```sh
-   aws configure sso      # values from `terraform output`; name the profile varpad-admin
+   aws configure sso      # values from `terraform output`; name the profile `default`,
+                          # or name it anything and export AWS_PROFILE=<name>
    aws logout             # drop the root credentials from `aws login`
-   direnv allow           # or: source .envrc   (from the repo root; sets AWS_PROFILE)
    aws sso login
    aws sts get-caller-identity   # should show AWSReservedSSO_AdministratorAccess_..., not root
    ```
    From here on, don't use root. Make sure it has MFA and no access keys.
-7. **Initialize the main module**
+7. **Create the main infrastructure**
    ```sh
-   cd infra
-   terraform init        # add -migrate-state if it reports existing local state
+   just init    # add -migrate-state if it reports existing local state
+   just plan
+   just apply
    ```
-   Then follow the workflow below.
+   Besides AWS, this sets up the GitHub repo for the workflows: the `production`
+   environment (you as required reviewer, `main` only) and the Actions variables they read.
+   From here on, follow the workflow below.
 
 ## Workflow: apply, then commit
 
@@ -133,6 +142,7 @@ print each command before running it.
 
 ```sh
 just                 # list recipes
+just init            # terraform init against the S3 backend (extra args pass through)
 just plan            # terraform plan -out=tfplan (extra args pass through)
 just apply           # terraform apply tfplan, after a confirmation prompt
 just ssm             # shell on the instance via SSM Session Manager

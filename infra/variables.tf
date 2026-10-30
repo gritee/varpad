@@ -1,13 +1,16 @@
+variable "account_id" {
+  description = "AWS account to deploy into. Terraform stops if the credentials belong to another account."
+  type        = string
+}
+
 variable "region" {
   description = "AWS region to deploy into."
   type        = string
-  default     = "us-east-1"
 }
 
 variable "name" {
   description = "Name prefix for resources and the Project tag."
   type        = string
-  default     = "varpad"
 }
 
 variable "instance_type" {
@@ -47,7 +50,6 @@ variable "ecr_images_to_keep" {
 }
 
 variable "github_repository" {
-  description = "GitHub repo whose main-branch workflows may assume the CI role, as it appears in the OIDC sub claim: owner@owner_id/name@repo_id."
+  description = "GitHub repo (owner/name) that deploys the app. Its workflows get AWS access via OIDC; its production environment and Actions variables are managed here."
   type        = string
-  default     = "gritee@257450698/varpad@1438830019"
 }

@@ -9,9 +9,10 @@ on:
   push:
     branches: [main]
 
+# Repository variables, managed by Terraform (infra/github.tf).
 env:
-  AWS_REGION: us-east-1
-  INSTANCE_NAME: varpad-app # Name tag of the instance to deploy to
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  INSTANCE_NAME: ${{ vars.INSTANCE_NAME }} # Name tag of the instance to deploy to
 
 jobs:
   # Builds only if the image's tag isn't in ECR yet.
@@ -38,7 +39,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: arn:aws:iam::646323602481:role/varpad-github-deploy
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - id: step_instance

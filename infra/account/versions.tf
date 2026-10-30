@@ -8,17 +8,18 @@ terraform {
     }
   }
 
+  # bucket and region come from infra/backend.hcl, written by infra/bootstrap:
+  #   terraform init -backend-config=../backend.hcl
   backend "s3" {
-    bucket       = "varpad-tfstate-646323602481-us-east-1"
     key          = "account/terraform.tfstate"
-    region       = "us-east-1"
     encrypt      = true
     use_lockfile = true
   }
 }
 
 provider "aws" {
-  region = var.region
+  region              = var.region
+  allowed_account_ids = [var.account_id]
 
   default_tags {
     tags = {
