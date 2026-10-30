@@ -21,13 +21,3 @@ output "ecr_repository_urls" {
   description = "Repository URL per image, for docker push/pull and the compose file."
   value       = { for image, repo in aws_ecr_repository.images : image => repo.repository_url }
 }
-
-output "github_actions_role_arn" {
-  description = "Role GitHub Actions assumes via OIDC (role-to-assume in workflows)."
-  value       = aws_iam_role.github_actions.arn
-}
-
-output "github_deploy_role_arn" {
-  description = "Role the production-environment deploy job assumes via OIDC."
-  value       = aws_iam_role.github_deploy.arn
-}

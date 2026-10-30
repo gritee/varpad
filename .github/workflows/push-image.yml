@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       image:
-        description: Image to build (directory with a Dockerfile; ECR repo varpad/<image>)
+        description: Image to build (directory with a Dockerfile; ECR repo <prefix>/<image>)
         required: true
   workflow_call:
     inputs:
@@ -21,9 +21,11 @@ on:
         description: Pushed image, as <registry>/<repo>:<tag>
         value: ${{ jobs.job_push.outputs.image_uri }}
 
+# Repository variables, managed by Terraform (infra/github.tf).
 env:
-  AWS_REGION: us-east-1
-  AWS_ROLE_ARN: arn:aws:iam::646323602481:role/varpad-github-actions
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ROLE_ARN: ${{ vars.AWS_PUSH_ROLE_ARN }}
+  ECR_REPO: ${{ vars.ECR_REPO_PREFIX }}/${{ inputs.image }}
   IMAGE: ${{ inputs.image }}
 
 jobs:
@@ -51,12 +53,12 @@ jobs:
         run: |
           tag=$(git log -1 --format=%H -- "$IMAGE/")
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "image_uri=${{ steps.step_ecr.outputs.registry }}/varpad/$IMAGE:$tag" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${{ steps.step_ecr.outputs.registry }}/$ECR_REPO:$tag" >> "$GITHUB_OUTPUT"
 
       # Tags are immutable, so an image already pushed for this tag is reused.
       - id: step_exists
         run: |
-          if aws ecr describe-images --repository-name "varpad/$IMAGE" \
+          if aws ecr describe-images --repository-name "$ECR_REPO" \
               --image-ids imageTag="${{ steps.step_uri.outputs.tag }}" >/dev/null 2>&1; then
             echo "pushed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -65,6 +67,6 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ env.IMAGE }}
-          platforms: linux/amd64 # matches the instance type (t3a)
+          platforms: ${{ vars.IMAGE_PLATFORM }} # the instance type's architecture
           push: true
           tags: ${{ steps.step_uri.outputs.image_uri }}

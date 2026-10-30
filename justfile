@@ -1,11 +1,16 @@
 # Project tasks. Run `just` to list them. Recipes print each command before running it.
 
-# AWS profile, as in .envrc. An AWS_PROFILE already set (direnv, .envrc.local) wins.
-export AWS_PROFILE := env("AWS_PROFILE", "varpad-admin")
+# Token for Terraform's GitHub provider, from the GitHub CLI's login.
+export GITHUB_TOKEN := env("GITHUB_TOKEN", `gh auth token`)
 
 # List available recipes
 default:
     @just --list
+
+# Initialize the main infra module against the S3 backend; extra args go to terraform init
+[working-directory('infra')]
+init *args: login
+    terraform init -backend-config=backend.hcl {{ args }}
 
 # Plan the main infra module into infra/tfplan; extra args go to terraform plan
 [working-directory('infra')]

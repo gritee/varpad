@@ -1,13 +1,16 @@
+variable "account_id" {
+  description = "AWS account to deploy into. Terraform stops if the credentials belong to another account."
+  type        = string
+}
+
 variable "region" {
   description = "Region where IAM Identity Center is enabled."
   type        = string
-  default     = "us-east-1"
 }
 
 variable "name" {
   description = "Account/project name, used in descriptions and the Project tag."
   type        = string
-  default     = "varpad"
 }
 
 # --- Admin user (set in terraform.tfvars; see terraform.tfvars.example) ---
@@ -36,4 +39,9 @@ variable "admin_session_duration" {
   description = "How long an admin CLI/console session lasts before re-login (ISO 8601 duration, max PT12H)."
   type        = string
   default     = "PT8H"
+}
+
+# Unused here; declared so the shared project.auto.tfvars loads without warnings.
+variable "github_repository" {
+  type = string
 }

@@ -1,5 +1,2 @@
 # macOS
 .DS_Store
-
-# Personal direnv/shell overrides (see .envrc)
-.envrc.local
